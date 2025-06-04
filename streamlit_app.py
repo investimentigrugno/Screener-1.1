@@ -7,11 +7,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # — PAGE CONFIG —
-
 st.set_page_config(
-        page_title=“Financial Screener”,
-        page_icon=“📈”,
-        layout=“wide”
+    page_title="Financial Screener",
+    page_icon="📈",
+    layout="wide"
 )
 
 # — SESSION STATE INITIALIZATION —
