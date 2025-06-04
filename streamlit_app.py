@@ -6,102 +6,100 @@ from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 
-# — PAGE CONFIG —
-
+# --- PAGE CONFIG ---
 st.set_page_config(
-page_title=“Financial Screener”,
-page_icon=“📈”,
-layout=“wide”
+    page_title="Financial Screener",
+    page_icon="📈",
+    layout="wide"
 )
 
-# — SESSION STATE INITIALIZATION —
+# --- SESSION STATE INITIALIZATION ---
+if 'data' not in st.session_state:
+    st.session_state.data = pd.DataFrame()
+if 'last_update' not in st.session_state:
+    st.session_state.last_update = None
 
-if ‘data’ not in st.session_state:
-st.session_state.data = pd.DataFrame()
-if ‘last_update’ not in st.session_state:
-st.session_state.last_update = None
-
-# — FUNCTIONS —
-
+# --- FUNCTIONS ---
 def format_technical_rating(rating: float) -> str:
-“”“Format technical rating”””
-if pd.isna(rating):
-return ‘N/A’
-elif rating >= 0.5:
-return ‘🟢 Strong Buy’
-elif rating >= 0.1:
-return ‘🟢 Buy’
-elif rating >= -0.1:
-return ‘🟡 Neutral’
-elif rating >= -0.5:
-return ‘🔴 Sell’
-else:
-return ‘🔴 Strong Sell’
+    """Format technical rating"""
+    if pd.isna(rating):
+        return 'N/A'
+    elif rating >= 0.5:
+        return '🟢 Strong Buy'
+    elif rating >= 0.1:
+        return '🟢 Buy'
+    elif rating >= -0.1:
+        return '🟡 Neutral'
+    elif rating >= -0.5:
+        return '🔴 Sell'
+    else:
+        return '🔴 Strong Sell'
 
-def format_currency(value, currency=’$’):
-“”“Format currency values”””
-if pd.isna(value):
-return “N/A”
-if value >= 1e12:
-return f”{currency}{value/1e12:.2f}T”
-elif value >= 1e9:
-return f”{currency}{value/1e9:.2f}B”
-elif value >= 1e6:
-return f”{currency}{value/1e6:.2f}M”
-else:
-return f”{currency}{value:.2f}”
+def format_currency(value, currency='$'):
+    """Format currency values"""
+    if pd.isna(value):
+        return "N/A"
+    if value >= 1e12:
+        return f"{currency}{value/1e12:.2f}T"
+    elif value >= 1e9:
+        return f"{currency}{value/1e9:.2f}B"
+    elif value >= 1e6:
+        return f"{currency}{value/1e6:.2f}M"
+    else:
+        return f"{currency}{value:.2f}"
 
 def format_percentage(value):
-“”“Format percentage values”””
-if pd.isna(value):
-return “N/A”
-return f”{value:.2f}%”
+    """Format percentage values"""
+    if pd.isna(value):
+        return "N/A"
+    return f"{value:.2f}%"
 
-def fetch_screener_data(min_mcap, max_mcap, rsi_min, rsi_max, min_vol, min_rat, min_fl,
-use_sma50, use_sma200, use_macd, max_res, asset_types):
-“”“Fetch data from TradingView screener with custom parameters”””
-try:
-with st.spinner(“🔍 Recupero dati dal mercato…”):
-# Build dynamic query based on parameters
-query_builder = (
-Query()
-.select(‘name’, ‘description’, ‘country’, ‘sector’, ‘currency’, ‘close’, ‘change’, ‘volume’,
-‘market_cap_basic’, ‘RSI’, ‘MACD.macd’, ‘MACD.signal’, ‘SMA50’, ‘SMA200’,
-‘Volatility.D’, ‘Recommend.All’, ‘float_shares_percent_current’)
-)
+@st.cache_data(ttl=300)  # Cache for 5 minutes
 
-```
-        # Base conditions
-        conditions = [
-            Column('type').isin(asset_types),
-            Column('market_cap_basic').between(min_mcap, max_mcap),
-            Column('RSI').between(rsi_min, rsi_max),
-            Column('Volatility.D') > min_vol,
-            Column('Recommend.All') > min_rat,
-            Column('float_shares_percent_current') > min_fl,
-        ]
-        
-        # Optional trend conditions
-        if use_sma50:
-            conditions.append(Column('close') > Column('SMA50'))
-        if use_sma200:
-            conditions.append(Column('close') > Column('SMA200'))
-        if use_macd:
-            conditions.append(Column('MACD.macd') > Column('MACD.signal'))
-        
-        # Apply all conditions
-        for condition in conditions:
-            query_builder = query_builder.where(condition)
-        
-        # Execute query
-        query = (
-            query_builder
-            .order_by('market_cap_basic', ascending=False)
-            .limit(max_res)
-            .get_scanner_data()
-        )
-        
-        df = query[1]  # Extract the DataFrame
+def fetch_screener_data(min_mcap, max_mcap, rsi_min, rsi_max, min_vol, min_rat, min_fl, 
+                       use_sma50, use_sma200, use_macd, max_res, asset_types):
+    """Fetch data from TradingView screener with custom parameters"""
+    try:
+        with st.spinner("🔍 Recupero dati dal mercato..."):
+            # Build dynamic query based on parameters
+            query_builder = (
+                Query()
+                .select('name', 'description', 'country', 'sector', 'currency', 'close', 'change', 'volume', 
+                       'market_cap_basic', 'RSI', 'MACD.macd', 'MACD.signal', 'SMA50', 'SMA200', 
+                       'Volatility.D', 'Recommend.All', 'float_shares_percent_current')
+            )
+            
+            # Base conditions
+            conditions = [
+                Column('type').isin(asset_types),
+                Column('market_cap_basic').between(min_mcap, max_mcap),
+                Column('RSI').between(rsi_min, rsi_max),
+                Column('Volatility.D') > min_vol,
+                Column('Recommend.All') > min_rat,
+                Column('float_shares_percent_current') > min_fl,
+            ]
+            
+            # Optional trend conditions
+            if use_sma50:
+                conditions.append(Column('close') > Column('SMA50'))
+            if use_sma200:
+                conditions.append(Column('close') > Column('SMA200'))
+            if use_macd:
+                conditions.append(Column('MACD.macd') > Column('MACD.signal'))
+            
+            # Apply all conditions
+            for condition in conditions:
+                query_builder = query_builder.where(condition)
+            
+            # Execute query
+            query = (
+                query_builder
+                .order_by('market_cap_basic', ascending=False)
+                .limit(max_res)
+                .get_scanner_data()
+            )
+            
+            df = query[1]  # Extract the DataFrame
         
         if not df.empty:
             # Format columns
